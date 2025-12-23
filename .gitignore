@@ -1,0 +1,24 @@
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+
+# Build results
+Build/
+*.log
+
+# Visual Studio
+*.sln
+*.vcxproj*
+*.opensdf
+*.sdf
+*.user
+*.VC.db
+
+# Rider
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
