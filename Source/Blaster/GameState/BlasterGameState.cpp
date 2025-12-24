@@ -22,7 +22,6 @@ void ABlasterGameState::SetVotingState(bool bNewActive, float Duration,
 	MapOptions = NewMapOptions;
 	VoteCounts = NewVoteCounts;
 	WinningMapIndex = NewWinningIndex;
-	OnRep_IsVotingActive();
 }
 
 void ABlasterGameState::UpdateVoteCounts(const TArray<int32>& NewVoteCounts)
@@ -38,24 +37,9 @@ void ABlasterGameState::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& 
 	DOREPLIFETIME(ABlasterGameState, MapOptions);
 	DOREPLIFETIME(ABlasterGameState, VoteCounts);
 	DOREPLIFETIME(ABlasterGameState, VotingTimeRemaining);
-	DOREPLIFETIME(ABlasterGameState, bIsVotingActive);
 }
 
 void ABlasterGameState::OnRep_VoteCounts()
 {
 	OnVoteCountsChanged.Broadcast(VoteCounts);
-}
-
-void ABlasterGameState::OnRep_IsVotingActive()
-{
-	UWorld* World = GetWorld();
-	if (World)
-	{
-		ABlasterPlayerControllerBase* BPC =  World->GetFirstPlayerController<ABlasterPlayerControllerBase>();
-		if (BPC)
-		{
-			BPC->ToggleLobbyWidget(bIsVotingActive);
-			BPC->SetIsVotingActive(bIsVotingActive);
-		}
-	}
 }

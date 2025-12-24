@@ -4,11 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "HUD/LobbyWidget.h"
 #include "BlasterPlayerControllerBase.generated.h"
-
-class ABlasterPlayerState;
-class ABlasterBaseGameMode;
 
 UCLASS()
 class BLASTER_API ABlasterPlayerControllerBase : public APlayerController
@@ -22,6 +18,7 @@ public:
 	void SetHUDWeaponAmmo(int32 Ammo);
 	void SetHUDCarriedAmmo(int32 Ammo);
 	void SetHUDMatchCountdown(float CountdownTime);
+	void SetHUDAnnouncementCountdown(float CountdownTime);
 	UFUNCTION(Client, Reliable)
 	void ClientAddToElimText(const FString& AttackerName);
 	void SetElimText(const FString& AttackerName);
@@ -41,12 +38,17 @@ public:
 	void SetLobbyWidgetVoteTick();
 
 	void SetIsVotingActive(bool bIsVoting);
+
+	void HandleMatchHasStarted();
+	void HandleMatchWaitingToStart();
+	void HandleCooldown();
+	void HandleVoting();
+	void HUDInit();
 	
 protected:
 	virtual void BeginPlay() override;
 	void SetHUDTime();
 	void PollInit();
-	void SetMapVoteTime();
 	void SetMapVoteCountdown(float CountdownTime);
 	
 	// Sync time between client and server
@@ -72,17 +74,22 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerCastVote(int32 MapIndex);
 
-	virtual void HandleMatchHasStarted();
-	void HandleMatchWaitingToStart();
+	UFUNCTION(Server, Reliable)
+	void ServerCheckMatchState();
+
+	UFUNCTION(Client, Reliable)
+	void ClientJoinMidGame(FName StateOfMatch, float Warmup, float Match, float StartingTime, float Vote);
+	
 private:
 	UPROPERTY()
 	class ABlasterHUD* BlasterHUD;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Match", meta=(AllowPrivateAccess="true"))
-	float MatchTime = 120.f;
-
+	float MatchTime = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Match", meta=(AllowPrivateAccess="true"))
-	float LobbyTime = 20.f;
+	float VoteTime = 0.f;
+	float WarmupTime = 0.f;
+	float LevelStartingTime = 0.f;
 	
 	uint32 CountdownInt = 0;
 

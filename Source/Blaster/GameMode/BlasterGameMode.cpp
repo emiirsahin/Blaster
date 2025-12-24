@@ -17,6 +17,7 @@ void ABlasterGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 	LevelStartingTime = GetWorld()->GetTimeSeconds();
+	SetMatchState(MatchState::WaitingToStart);
 }
 
 void ABlasterGameMode::Tick(float DeltaTime)
@@ -30,6 +31,15 @@ void ABlasterGameMode::Tick(float DeltaTime)
 		if (CountdownTime < 0.f)
 		{
 			StartMatch();
+		}
+	}
+	else if (MatchState == MatchState::InProgress)
+	{
+		CountdownTime = WarmupTime + MatchTime - GetWorld()->GetTimeSeconds() + LevelStartingTime;
+
+		if (CountdownTime < 0.f)
+		{
+			SetMatchState(MatchState::Cooldown);
 		}
 	}
 }
@@ -86,18 +96,4 @@ void ABlasterGameMode::OnVoteCompleted(int32 ChosenMapIndex)
 	const FMapVoteOption& Option = MapOptions[ChosenMapIndex];
 	FString TravelURL = Option.MapPath.ToString() + TEXT("?listen");
 	GetWorld()->ServerTravel(TravelURL);
-}
-
-void ABlasterGameMode::OnMatchStateSet()
-{
-    Super::OnMatchStateSet();
-
-    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-    {
-        ABlasterPlayerControllerBase* BlasterPlayer = Cast<ABlasterPlayerControllerBase>(*It);
-        if (BlasterPlayer)
-        {
-            BlasterPlayer->OnMatchStateSet(MatchState);
-        }
-    }
 }

@@ -30,16 +30,6 @@ void ABlasterHUD::AddLobbyWidget()
 	{
 		LobbyWidget = CreateWidget<ULobbyWidget>(PlayerController, LobbyWidgetClass);
 		LobbyWidget->LobbyDisplaySetup();
-		if (UWorld* World = GetWorld())
-		{
-			if (ABlasterGameState* GS = World->GetGameState<ABlasterGameState>())
-			{
-				if (GS->bIsVotingActive)
-				{
-					ToggleLobbyWidget(true);
-				}
-			}
-		}
 	}
 }
 

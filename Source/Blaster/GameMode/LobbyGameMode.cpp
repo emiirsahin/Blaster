@@ -4,15 +4,22 @@
 #include "LobbyGameMode.h"
 #include "GameFramework/GameStateBase.h"
 
+void ALobbyGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+	SetMatchState(MatchState::PreVote);
+}
+
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
 	int32 NumberOfPlayers = GameState.Get()->PlayerArray.Num();
 
-	if (NumberOfPlayers >= 2)
+	if (NumberOfPlayers == 2)
 	{
 		StartMapVote();
+		SetMatchState(MatchState::Voting);
 	}
 }
 

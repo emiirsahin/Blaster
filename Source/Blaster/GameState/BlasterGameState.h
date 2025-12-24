@@ -26,13 +26,12 @@ public:
 	FOnVoteCountsChanged OnVoteCountsChanged;
 
 	void UpdateVoteCounts(const TArray<int32>& NewVoteCounts);
-	
-	UPROPERTY(ReplicatedUsing=OnRep_IsVotingActive, BlueprintReadOnly, Category="Voting")
-	bool bIsVotingActive;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category="Voting")
 	float VotingTimeRemaining;
 
+	bool bIsVotingActive;
+	
 	int32 WinningMapIndex;
 
 	void SetVotingState(bool bNewActive, float Duration, const TArray<FMapVoteOption>& NewMapOptions,
@@ -41,9 +40,6 @@ public:
 protected:
 	UFUNCTION()
 	void OnRep_VoteCounts();
-
-	UFUNCTION()
-	void OnRep_IsVotingActive();
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	

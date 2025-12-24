@@ -2,9 +2,16 @@
 #include "BlasterBaseGameMode.h"
 #include "GameState/BlasterGameState.h"
 #include "PlayerState/BlasterPlayerState.h"
+#include "PlayerController/BlasterPlayerControllerBase.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
-#include "PlayerController/BlasterPlayerControllerBase.h"
+
+namespace MatchState
+{
+    const FName Cooldown = FName("Cooldown");
+    const FName Voting = FName("Voting");
+    const FName PreVote = FName("PreVote");
+}
 
 ABlasterBaseGameMode::ABlasterBaseGameMode()
 {
@@ -127,4 +134,35 @@ void ABlasterBaseGameMode::RegisterVote(int32 MapIndex, ABlasterPlayerState* Vot
 
 void ABlasterBaseGameMode::OnVoteCompleted(int32 ChosenMapIndex)
 {
+}
+
+void ABlasterBaseGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+    Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+
+    // If your custom states should still allow players to spawn:
+    const FName State = GetMatchState();
+    const bool bShouldSpawn =
+        (State == MatchState::InProgress) ||
+        (State == MatchState::Voting) ||      // <-- your custom state
+        (State == MatchState::PreVote);       // <-- your custom state
+
+    if (bShouldSpawn && NewPlayer && NewPlayer->GetPawn() == nullptr)
+    {
+        RestartPlayer(NewPlayer);
+    }
+}
+
+void ABlasterBaseGameMode::OnMatchStateSet()
+{
+    Super::OnMatchStateSet();
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        ABlasterPlayerControllerBase* BlasterPlayer = Cast<ABlasterPlayerControllerBase>(*It);
+        if (BlasterPlayer)
+        {
+            BlasterPlayer->OnMatchStateSet(MatchState);
+        }
+    }
 }

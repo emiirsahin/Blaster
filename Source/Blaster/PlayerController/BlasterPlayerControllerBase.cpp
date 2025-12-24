@@ -1,6 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "BlasterPlayerControllerBase.h"
 #include "HUD/BlasterHUD.h"
 #include "HUD/CharacterOverlay.h"
@@ -12,8 +9,8 @@
 #include "Net/UnrealNetwork.h"
 #include "HUD/Announcement.h"
 #include "HUD/LobbyWidget.h"
-#include "GameState/BlasterGameState.h"
 #include "GameMode/BlasterBaseGameMode.h"
+#include "Kismet/GameplayStatics.h"
 
 void ABlasterPlayerControllerBase::OnPossess(APawn* InPawn)
 {
@@ -29,23 +26,11 @@ void ABlasterPlayerControllerBase::OnPossess(APawn* InPawn)
 void ABlasterPlayerControllerBase::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
 
-	if (BlasterHUD)
-	{
-		BlasterHUD->AddLobbyWidget();	// Creates the LobbyWidget. LobbyWidget needs to be present from the start and be activated/deactivated using its Toggle function. Wrappers for this function exist in PC and HUD.
-		BlasterHUD->AddAnnouncement();
-		
-		if (bIsVotingActive)
-		{
-			BlasterHUD->ToggleLobbyWidget(true);
-		}
-		else
-		{
-			BlasterHUD->ToggleAnnouncement(true);
-		}
-	}
+	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
+	HUDInit();
+	
+	ServerCheckMatchState();
 }
 
 void ABlasterPlayerControllerBase::Tick(float DeltaTime)
@@ -53,12 +38,6 @@ void ABlasterPlayerControllerBase::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	SetHUDTime();
 	CheckTimeSync(DeltaTime);
-
-	if (bIsVotingActive)
-	{
-		SetMapVoteTime();
-	}
-	
 	PollInit();
 }
 
@@ -209,23 +188,54 @@ void ABlasterPlayerControllerBase::SetHUDMatchCountdown(float CountdownTime)
 	}
 }
 
-void ABlasterPlayerControllerBase::SetHUDTime()
+void ABlasterPlayerControllerBase::SetHUDAnnouncementCountdown(float CountdownTime)
 {
-	uint32 SecondsLeft = FMath::CeilToInt(MatchTime - GetServerTime());
-	if (CountdownInt != SecondsLeft)
+	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
+	bool bHUDValid = BlasterHUD &&
+		BlasterHUD->Announcement &&
+		BlasterHUD->Announcement->WarmupTime;
+	if (bHUDValid)
 	{
-		SetHUDMatchCountdown(MatchTime - GetServerTime());
+		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.f);
+		int32 Seconds = CountdownTime - Minutes * 60;
+		FString CountdownText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
+		BlasterHUD->Announcement->WarmupTime->SetText(FText::FromString(CountdownText));
 	}
-	CountdownInt = SecondsLeft;
 }
 
-void ABlasterPlayerControllerBase::SetMapVoteTime()
+void ABlasterPlayerControllerBase::SetHUDTime()
 {
-	uint32 SecondsLeft = FMath::CeilToInt(LobbyTime - GetServerTime());
+	float TimeLeft = 0.f;
+	if (MatchState == MatchState::Voting)
+	{
+		TimeLeft = VoteTime - GetServerTime();
+	}
+	else if (MatchState == MatchState::WaitingToStart)
+	{
+		TimeLeft = WarmupTime - GetServerTime() + LevelStartingTime;
+	}
+	else if (MatchState == MatchState::InProgress)
+	{
+		TimeLeft = WarmupTime + MatchTime - GetServerTime() + LevelStartingTime;
+	}
+	
+	uint32 SecondsLeft = FMath::CeilToInt(TimeLeft);
 	if (CountdownInt != SecondsLeft)
 	{
-		SetMapVoteCountdown(LobbyTime - GetServerTime());
+		if (MatchState == MatchState::Voting)
+		{
+			SetMapVoteCountdown(TimeLeft);
+		}
+		if (MatchState == MatchState::WaitingToStart)
+		{
+			SetHUDAnnouncementCountdown(TimeLeft);
+		}
+		if (MatchState == MatchState::InProgress)
+		{
+			SetHUDMatchCountdown(TimeLeft);
+		}
 	}
+	
 	CountdownInt = SecondsLeft;
 }
 
@@ -298,27 +308,41 @@ void ABlasterPlayerControllerBase::OnMatchStateSet(FName State)
 {
 	MatchState = State;
 	
-	if (MatchState == MatchState::WaitingToStart)
+	if (MatchState == MatchState::Voting)
+	{
+		HandleVoting();
+	}
+	else if (MatchState == MatchState::WaitingToStart)
 	{
 		HandleMatchWaitingToStart();
 	}
-	
-	if (MatchState == MatchState::InProgress)
+	else if (MatchState == MatchState::InProgress)
 	{
 		HandleMatchHasStarted();
+	}
+	else if (MatchState == MatchState::Cooldown)
+	{
+		HandleCooldown();
 	}
 }
 
 void ABlasterPlayerControllerBase::OnRep_MatchState()
 {
-	if (MatchState == MatchState::WaitingToStart)
+	if (MatchState == MatchState::Voting)
+	{
+		HandleVoting();
+	}
+	else if (MatchState == MatchState::WaitingToStart)
 	{
 		HandleMatchWaitingToStart();
 	}
-	
-	if (MatchState == MatchState::InProgress)
+	else if (MatchState == MatchState::InProgress)
 	{
 		HandleMatchHasStarted();
+	}
+	else if (MatchState == MatchState::Cooldown)
+	{
+		HandleCooldown();
 	}
 }
 
@@ -344,6 +368,69 @@ void ABlasterPlayerControllerBase::HandleMatchWaitingToStart()
 		{
 			BlasterHUD->ToggleAnnouncement(true);
 		}
+	}
+}
+
+void ABlasterPlayerControllerBase::HandleCooldown()
+{
+	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
+	if (BlasterHUD)
+	{
+		BlasterHUD->CharacterOverlay->RemoveFromParent();
+		if (BlasterHUD->Announcement)
+		{
+			BlasterHUD->ToggleAnnouncement(true);
+		}
+	}
+}
+
+void ABlasterPlayerControllerBase::HandleVoting()
+{
+	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
+	if (BlasterHUD)
+	{
+		if (BlasterHUD->Announcement)
+		{
+			BlasterHUD->Announcement->ToggleAnnouncement(false);
+		}
+		if (BlasterHUD->LobbyWidget)
+		{
+			BlasterHUD->ToggleLobbyWidget(true);
+		}
+	}
+}
+
+void ABlasterPlayerControllerBase::HUDInit()
+{
+	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
+	if (BlasterHUD)
+	{
+		BlasterHUD->AddLobbyWidget();
+		BlasterHUD->AddAnnouncement();
+	}
+}
+
+void ABlasterPlayerControllerBase::ClientJoinMidGame_Implementation(FName StateOfMatch, float Warmup, float Match, float StartingTime, float Vote)
+{
+	MatchState = StateOfMatch;
+	WarmupTime = Warmup;
+	MatchTime = Match;
+	LevelStartingTime = StartingTime;
+	VoteTime = Vote;
+	OnMatchStateSet(MatchState);
+}
+
+void ABlasterPlayerControllerBase::ServerCheckMatchState_Implementation()
+{
+	ABlasterBaseGameMode* GameMode = Cast<ABlasterBaseGameMode>(UGameplayStatics::GetGameMode(this));
+	if (GameMode)
+	{
+		WarmupTime = GameMode->WarmupTime;
+		MatchTime = GameMode->MatchTime;
+		VoteTime = GameMode->VoteTime;
+		LevelStartingTime = GameMode->LevelStartingTime;
+		OnMatchStateSet(GameMode->GetMatchState());
+		ClientJoinMidGame(MatchState, WarmupTime, MatchTime, LevelStartingTime, VoteTime);
 	}
 }
 
