@@ -25,6 +25,7 @@ public:
 	void Reload();
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
+	void FireButtonPressed(bool bPressed);
 	
 protected:
 	virtual void BeginPlay() override;
@@ -36,8 +37,6 @@ protected:
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
 	void Fire();
-
-	void FireButtonPressed(bool bPressed);
 
 	UFUNCTION(Server, Reliable)
 	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
@@ -56,11 +55,13 @@ protected:
 	int32 AmountToReload();
 private:
 	UPROPERTY()
-	ABlasterCharacterBase* Character;
+	class ABlasterCharacterBase* Character;
+	
 	UPROPERTY()
-	ABlasterPlayerControllerBase* Controller;
+	class ABlasterPlayerControllerBase* Controller;
+	
 	UPROPERTY()
-	ABlasterHUD* HUD;
+	class ABlasterHUD* HUD;
 	
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon;

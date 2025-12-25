@@ -18,8 +18,7 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 
 	if (NumberOfPlayers == 2)
 	{
-		StartMapVote();
-		SetMatchState(MatchState::Voting);
+		StartVotingProcess();
 	}
 }
 

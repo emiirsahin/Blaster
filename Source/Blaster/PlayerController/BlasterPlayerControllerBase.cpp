@@ -11,7 +11,9 @@
 #include "HUD/LobbyWidget.h"
 #include "GameMode/BlasterBaseGameMode.h"
 #include "Kismet/GameplayStatics.h"
-
+#include "BlasterComponents/CombatComponent.h"
+#include "GameState/BlasterGameState.h"
+	
 void ABlasterPlayerControllerBase::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
@@ -181,6 +183,12 @@ void ABlasterPlayerControllerBase::SetHUDMatchCountdown(float CountdownTime)
 		BlasterHUD->CharacterOverlay->MatchCountdownText;
 	if (bHUDValid)
 	{
+		if (CountdownTime < 0.f)
+		{
+			BlasterHUD->CharacterOverlay->MatchCountdownText->SetText(FText());
+			return;
+		}
+		
 		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.f);
 		int32 Seconds = CountdownTime - Minutes * 60;
 		FString CountdownText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
@@ -196,6 +204,12 @@ void ABlasterPlayerControllerBase::SetHUDAnnouncementCountdown(float CountdownTi
 		BlasterHUD->Announcement->WarmupTime;
 	if (bHUDValid)
 	{
+		if (CountdownTime < 0.f)
+		{
+			BlasterHUD->Announcement->WarmupTime->SetText(FText());
+			return;
+		}
+		
 		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.f);
 		int32 Seconds = CountdownTime - Minutes * 60;
 		FString CountdownText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
@@ -208,25 +222,38 @@ void ABlasterPlayerControllerBase::SetHUDTime()
 	float TimeLeft = 0.f;
 	if (MatchState == MatchState::Voting)
 	{
-		TimeLeft = VoteTime - GetServerTime();
+		TimeLeft = FMath::Fmod(LevelStartingTime + VoteTime - GetServerTime() + WarmupTime + MatchTime + CooldownTime,  WarmupTime + MatchTime + CooldownTime);
 	}
 	else if (MatchState == MatchState::WaitingToStart)
 	{
-		TimeLeft = WarmupTime - GetServerTime() + LevelStartingTime;
+		TimeLeft = LevelStartingTime + WarmupTime - GetServerTime();
 	}
 	else if (MatchState == MatchState::InProgress)
 	{
-		TimeLeft = WarmupTime + MatchTime - GetServerTime() + LevelStartingTime;
+		TimeLeft = LevelStartingTime + WarmupTime + MatchTime - GetServerTime();
 	}
-	
+	else if (MatchState == MatchState::Cooldown)
+	{
+		TimeLeft = LevelStartingTime + WarmupTime + MatchTime + CooldownTime - GetServerTime();
+	}
 	uint32 SecondsLeft = FMath::CeilToInt(TimeLeft);
+	
+	/*if (HasAuthority()) TODO idk if this is necessary.
+	{
+		BlasterBaseGameMode = BlasterBaseGameMode == nullptr ? Cast<ABlasterBaseGameMode>(UGameplayStatics::GetGameMode(this)) : BlasterBaseGameMode;
+		if (BlasterBaseGameMode)
+		{
+			SecondsLeft = FMath::CeilToInt(BlasterBaseGameMode->GetCountdownTime() + LevelStartingTime);
+		}
+	}*/
+	
 	if (CountdownInt != SecondsLeft)
 	{
 		if (MatchState == MatchState::Voting)
 		{
 			SetMapVoteCountdown(TimeLeft);
 		}
-		if (MatchState == MatchState::WaitingToStart)
+		if (MatchState == MatchState::WaitingToStart || MatchState == MatchState::Cooldown)
 		{
 			SetHUDAnnouncementCountdown(TimeLeft);
 		}
@@ -248,6 +275,11 @@ void ABlasterPlayerControllerBase::SetMapVoteCountdown(float CountdownTime)
 	if (bHUDValid)
 	{
 		float ClampedTime = FMath::Max(0.f, CountdownTime);
+		if (ClampedTime > VoteTime)
+		{
+			ClampedTime = 0.f;
+		}
+		
 		int32 TotalSeconds = FMath::FloorToInt(ClampedTime);
 
 		int32 Minutes = TotalSeconds / 60;
@@ -377,10 +409,51 @@ void ABlasterPlayerControllerBase::HandleCooldown()
 	if (BlasterHUD)
 	{
 		BlasterHUD->CharacterOverlay->RemoveFromParent();
-		if (BlasterHUD->Announcement)
+		bool bHUDValid = BlasterHUD->Announcement &&
+			BlasterHUD->Announcement->AnnouncementText &&
+			BlasterHUD->Announcement->InfoText;
+		
+		if (bHUDValid)
 		{
 			BlasterHUD->ToggleAnnouncement(true);
+			FString AnnouncementText("Map Vote Starts In:");
+			BlasterHUD->Announcement->AnnouncementText->SetText(FText::FromString(AnnouncementText));
+
+			ABlasterGameState* BlasterGameState = Cast<ABlasterGameState>(UGameplayStatics::GetGameState(this));
+			ABlasterPlayerState* BlasterPlayerState = GetPlayerState<ABlasterPlayerState>();
+			if (BlasterGameState && BlasterPlayerState)
+			{
+				TArray<ABlasterPlayerState*> TopPlayers = BlasterGameState->TopScoringPlayers;
+				FString InfoTextString;
+				if (TopPlayers.Num() == 0)
+				{
+					InfoTextString = FString("What? Yall pacifists or sum?");
+				}
+				else if (TopPlayers.Num() == 1 && TopPlayers[0] == BlasterPlayerState)
+				{
+					InfoTextString = FString("You win");
+				}
+				else if (TopPlayers.Num() == 1 && TopPlayers[0] != BlasterPlayerState)
+				{
+					InfoTextString = FString::Printf(TEXT("Winner: \n%s"), *TopPlayers[0]->GetPlayerName());
+				}
+				else if (TopPlayers.Num() > 1)
+				{
+					InfoTextString = FString("Players tied for the win:\n");
+					for (auto TiedPlayer : TopPlayers)
+					{
+						InfoTextString.Append(FString::Printf(TEXT("%s\n"), *TiedPlayer->GetPlayerName()));
+					}
+				}
+				BlasterHUD->Announcement->InfoText->SetText(FText::FromString(InfoTextString));
+			}
 		}
+	}
+	ABlasterCharacterBase* BlasterCharacter = Cast<ABlasterCharacterBase>(GetPawn());
+	if (BlasterCharacter && BlasterCharacter->GetCombat())
+	{
+		BlasterCharacter->bDisableGameplay = true;
+		BlasterCharacter->GetCombat()->FireButtonPressed(false);
 	}
 }
 
@@ -410,13 +483,14 @@ void ABlasterPlayerControllerBase::HUDInit()
 	}
 }
 
-void ABlasterPlayerControllerBase::ClientJoinMidGame_Implementation(FName StateOfMatch, float Warmup, float Match, float StartingTime, float Vote)
+void ABlasterPlayerControllerBase::ClientJoinMidGame_Implementation(FName StateOfMatch, float Warmup, float Match, float StartingTime, float Vote, float Cooldown)
 {
 	MatchState = StateOfMatch;
 	WarmupTime = Warmup;
 	MatchTime = Match;
 	LevelStartingTime = StartingTime;
 	VoteTime = Vote;
+	CooldownTime = Cooldown;
 	OnMatchStateSet(MatchState);
 }
 
@@ -429,8 +503,9 @@ void ABlasterPlayerControllerBase::ServerCheckMatchState_Implementation()
 		MatchTime = GameMode->MatchTime;
 		VoteTime = GameMode->VoteTime;
 		LevelStartingTime = GameMode->LevelStartingTime;
+		CooldownTime = GameMode->CooldownTime;
 		OnMatchStateSet(GameMode->GetMatchState());
-		ClientJoinMidGame(MatchState, WarmupTime, MatchTime, LevelStartingTime, VoteTime);
+		ClientJoinMidGame(MatchState, WarmupTime, MatchTime, LevelStartingTime, VoteTime, CooldownTime);
 	}
 }
 

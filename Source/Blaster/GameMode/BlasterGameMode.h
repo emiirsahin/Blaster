@@ -25,6 +25,5 @@ protected:
 	virtual void OnVoteCompleted(int32 ChosenMapIndex) override;
 	
 private:
-	float CountdownTime = 0.f;
 
 };

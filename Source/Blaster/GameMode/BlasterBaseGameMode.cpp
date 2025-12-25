@@ -26,6 +26,12 @@ ABlasterGameState* ABlasterBaseGameMode::GetBlasterGameState() const
     return GetGameState<ABlasterGameState>();
 }
 
+void ABlasterBaseGameMode::StartVotingProcess()
+{
+    SetMatchState(MatchState::Voting);
+    StartMapVote();
+}
+
 void ABlasterBaseGameMode::StartMapVote()
 {
     if (bIsVotingActive || MapOptions.Num() == 0)
@@ -90,6 +96,11 @@ void ABlasterBaseGameMode::EndMapVote()
         }
     }
 
+    if (VoteCounts[0] == VoteCounts[1])
+    {
+        BestIndex = FMath::RandRange(0, 1);
+    }
+
     WinningMapIndex = BestIndex;
 
     if (ABlasterGameState* GS = GetBlasterGameState())
@@ -140,12 +151,11 @@ void ABlasterBaseGameMode::HandleStartingNewPlayer_Implementation(APlayerControl
 {
     Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 
-    // If your custom states should still allow players to spawn:
     const FName State = GetMatchState();
     const bool bShouldSpawn =
         (State == MatchState::InProgress) ||
-        (State == MatchState::Voting) ||      // <-- your custom state
-        (State == MatchState::PreVote);       // <-- your custom state
+        (State == MatchState::Voting) ||
+        (State == MatchState::PreVote);
 
     if (bShouldSpawn && NewPlayer && NewPlayer->GetPawn() == nullptr)
     {

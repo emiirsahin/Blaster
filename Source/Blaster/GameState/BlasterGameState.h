@@ -14,6 +14,10 @@ class BLASTER_API ABlasterGameState : public AGameState
 public:
 	ABlasterGameState();
 
+	UPROPERTY(Replicated)
+	TArray<class ABlasterPlayerState*> TopScoringPlayers;
+	void UpdateTopScore(ABlasterPlayerState* ScoringPlayer);
+	
 	UPROPERTY(Replicated, BlueprintReadOnly, Category="Voting")
 	TArray<FMapVoteOption> MapOptions;
 
@@ -42,5 +46,8 @@ protected:
 	void OnRep_VoteCounts();
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+private:
+	float TopScore = 0.f;
 	
 };

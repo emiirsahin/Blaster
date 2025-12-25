@@ -52,8 +52,11 @@ public:
 	float HeadYawClampAbs   =  60.f;   // left/right
 	UPROPERTY(EditAnywhere, Category="LookAt|Head")
 	float HeadInterpSpeed   =   8.f;   // smoothing
+
+	UPROPERTY(Replicated)
+	bool bDisableGameplay = false;
 	
-protected:
+	protected:
 	virtual void BeginPlay() override;
 
 	UFUNCTION()
@@ -78,6 +81,7 @@ protected:
 	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser);
 	void UpdateHUDHealth();
 	void PollInit(); // Poll for any relevant classes and initialize our HUD
+	void RotateInPlace(float DeltaTime);
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
@@ -246,4 +250,6 @@ public:
 	FORCEINLINE float GetHealth() const { return Health; }
 	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }
 	ECombatState GetCombatState() const;
+	FORCEINLINE UCombatComponent* GetCombat() const { return Combat; }
+	FORCEINLINE bool GetDisabledGameplay() const { return bDisableGameplay; }
 };

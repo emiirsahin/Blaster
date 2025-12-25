@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "PlayerController/BlasterPlayerControllerBase.h"
 #include "PlayerState/BlasterPlayerState.h"
+#include "GameState/BlasterGameState.h"
 
 ABlasterGameMode::ABlasterGameMode()
 {
@@ -42,6 +43,15 @@ void ABlasterGameMode::Tick(float DeltaTime)
 			SetMatchState(MatchState::Cooldown);
 		}
 	}
+	else if (MatchState == MatchState::Cooldown)
+	{
+		CountdownTime = CooldownTime + WarmupTime + MatchTime - GetWorld()->GetTimeSeconds() + LevelStartingTime;
+
+		if (CountdownTime < 0.f)
+		{
+			StartVotingProcess();
+		}
+	}
 }
 
 void ABlasterGameMode::PlayerEliminated(class ABlasterCharacterBase* ElimmedCharacter,
@@ -50,9 +60,12 @@ void ABlasterGameMode::PlayerEliminated(class ABlasterCharacterBase* ElimmedChar
 	ABlasterPlayerState* AttackerPlayerState = AttackerController ? AttackerController->GetPlayerState<ABlasterPlayerState>() : nullptr;
 	ABlasterPlayerState* VictimPlayerState = VictimController ? VictimController->GetPlayerState<ABlasterPlayerState>() : nullptr;
 
-	if (AttackerPlayerState && AttackerPlayerState != VictimPlayerState)
+	ABlasterGameState* BlasterGameState = GetGameState<ABlasterGameState>();
+		
+	if (AttackerPlayerState && AttackerPlayerState != VictimPlayerState && BlasterGameState)
 	{
-		AttackerPlayerState->AddToScore(1.f);	
+		AttackerPlayerState->AddToScore(1.f);
+		BlasterGameState->UpdateTopScore(AttackerPlayerState);
 	}
 	if (VictimPlayerState)
 	{

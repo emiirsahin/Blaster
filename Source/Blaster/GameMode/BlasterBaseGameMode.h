@@ -46,6 +46,8 @@ public:
 
 	UPROPERTY(EditDefaultsOnly)
 	float CooldownTime = 10.f;
+
+	FORCEINLINE float GetCountdownTime() const { return CountdownTime; }
 	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category="Voting")
@@ -70,4 +72,8 @@ protected:
 	virtual void OnMatchStateSet() override;
 
 	ABlasterGameState* GetBlasterGameState() const;
+
+	float CountdownTime = 0.f;
+
+	void StartVotingProcess();
 };
